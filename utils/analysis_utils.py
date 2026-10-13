@@ -234,6 +234,19 @@ def compute_global_impact(impact, socioeconomics, rate, group_dim="region"):
 
 
 ### Analysis Functions ###
+def region_to_xvec(da, polygons, region_dim="region"):
+    # Attach polygon geometries to a region-indexed xarray and make it an xvec geometry index
+    gdf = polygons.reset_index()
+    gdf["geometry"] = gdf.geometry.make_valid()
+
+    geoms = gdf.set_index(region_dim).loc[da[region_dim].values, "geometry"]
+
+    return (
+        da.assign_coords(geometry=(region_dim, geoms.values))
+        .swap_dims({region_dim: "geometry"})
+        .xvec.set_geom_indexes("geometry", crs=gdf.crs)
+    )
+
 def xarray_to_gpd(data, polygons, crs="ESRI:54030"):
     # Merge xarray with dim "region" with Impact Region Geopandas
     _polygons_data = polygons.merge(

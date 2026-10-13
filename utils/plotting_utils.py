@@ -5,7 +5,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 
-from utils.analysis_utils import _get_land, crossed_ttest
+from utils.analysis_utils import _get_land, land_only, crossed_ttest
 
 DIVERGING_CMAPS = {
     "bwr",
@@ -32,7 +32,8 @@ def add_polygons(
     ens_mean = anom.mean(member_dim)
     # Fraction of members whose anomaly sign matches the ensemble-mean sign
     agree = (np.sign(anom) == np.sign(ens_mean)).mean(member_dim)
-    mask = (agree >= threshold).astype(float)
+    mask = (agree <= threshold).astype(float)
+    mask = land_only(mask)
     # ccrs Transform
     kw = {"transform": transform} if transform is not None else {}
 

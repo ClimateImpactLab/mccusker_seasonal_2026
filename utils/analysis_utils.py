@@ -694,8 +694,11 @@ def compute_area_weighted_mean(ds, lat_name="lat", lon_name="lon"):
     return ds.weighted(weights).mean((lat_name, lon_name))
 
 
-def land_only(da, lat_name="lat", lon_name="lon"):
+def land_only(da, lat_name="lat", lon_name="lon", clip_antarctica = False):
     # Clip gridded data to land mask
     da = da.rename({lon_name: "lon", lat_name: "lat"})
     mask = _get_land_mask(tuple(da.lon.values), tuple(da.lat.values))
-    return da.where(mask.notnull() & (da.lat > -60))
+    if clip_antarctica:
+        return da.where(mask.notnull() & (da.lat > -60))
+    else:
+        return da.where(mask.notnull())

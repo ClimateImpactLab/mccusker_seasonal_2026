@@ -5,7 +5,6 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 
-
 from utils.analysis_utils import _get_land
 
 DIVERGING_CMAPS = {
@@ -67,6 +66,80 @@ def _hatch_regions(ax, mask, hatch, hatch_color, outline, outline_color, outline
     )
     # Hatch color follows edgecolor; linewidth=0 hides the per-region borders
     geoms.plot(ax=ax, facecolor="none", edgecolor=hatch_color, hatch=hatch, linewidth=0, **kw)
+
+    # Outer boundary of the masked area, with internal region borders dissolved
+    if outline and len(geoms):
+        gpd.GeoSeries([geoms.union_all().boundary]).plot(
+            ax=ax, color=outline_color, linewidth=outline_width, **kw
+        )
+
+
+def add_polygons(
+    ax,
+    mask,
+    hatch="///",
+    hatch_color="k",
+    outline=True,
+    outline_color="k",
+    outline_width=0.5,
+    transform=None,
+):
+    # Dispatch on mask type: xvec geometry index -> regions, lat/lon -> gridded
+    kw = {"transform": transform} if transform is not None else {}
+    style = {
+        "hatch": hatch,
+        "hatch_color": hatch_color,
+        "outline": outline,
+        "outline_color": outline_color,
+        "outline_width": outline_width,
+    }
+    if "geometry" in mask.coords:
+        _hatch_regions(ax, mask, kw=kw, **style)
+    elif {"lat", "lon"} <= set(mask.coords):
+        _hatch_grid(ax, mask, kw=kw, **style)
+    else:
+        raise ValueError(
+            f"mask needs a 'geometry' coord or 'lat'/'lon' coords, got {list(mask.coords)}"
+        )
+
+
+def _hatch_grid(
+    ax, mask, hatch, hatch_color, outline, outline_color, outline_width, kw
+):
+    # contourf has no hatch-color argument; it reads rcParams at creation time
+    with plt.rc_context({"hatch.color": hatch_color}):
+        ax.contourf(
+            mask.lon,
+            mask.lat,
+            mask,
+            levels=[0.5, 1.5],
+            colors="none",
+            hatches=[hatch],
+            **kw,
+        )
+    if outline:
+        ax.contour(
+            mask.lon,
+            mask.lat,
+            mask,
+            levels=[0.5],
+            colors=outline_color,
+            linewidths=outline_width,
+            **kw,
+        )
+
+
+def _hatch_regions(
+    ax, mask, hatch, hatch_color, outline, outline_color, outline_width, kw
+):
+    selected = mask.values.astype(bool)
+    geoms = gpd.GeoSeries(
+        mask["geometry"].values[selected], crs=mask.xvec.geom_coords["geometry"].crs
+    )
+    # Hatch color follows edgecolor; linewidth=0 hides the per-region borders
+    geoms.plot(
+        ax=ax, facecolor="none", edgecolor=hatch_color, hatch=hatch, linewidth=0, **kw
+    )
 
     # Outer boundary of the masked area, with internal region borders dissolved
     if outline and len(geoms):

@@ -1,8 +1,8 @@
-import xarray as xr
 import numpy as np
-import scipy.stats as stats
+import xarray as xr
+from scipy import stats
 
-from utils.analysis_utils import land_only, crossed_ttest
+from utils.analysis_utils import crossed_ttest, land_only
 
 
 def compute_agreement_mask(anom, threshold=0.8, member_dim="number"):

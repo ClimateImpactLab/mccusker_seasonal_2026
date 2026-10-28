@@ -260,25 +260,38 @@ def xarray_to_gpd(data, polygons, crs="ESRI:54030"):
 
 
 def crossed_sem(da, a="number", b="sample"):
-    na, nb = da.sizes[a], da.sizes[b]
-    grand = da.mean((a, b))
-    m_a = da.mean(b)
-    m_b = da.mean(a)
-
-    resid = da - m_a - m_b + grand
-    var_e = (resid**2).sum((a, b)) / ((na - 1) * (nb - 1))
-
-    var_mean = m_a.var(a, ddof=1) / na + m_b.var(b, ddof=1) / nb - var_e / (na * nb)
-    return np.sqrt(var_mean.clip(min=0))
+    """
+    Compute the Standard Error across dimesnions (a, opt: b) of an xarray.
+    """
+    if b is not None:
+        # Compute crossed standard error (study design for samples shared across all ensemble members)
+        na, nb = da.sizes[a], da.sizes[b]
+        grand = da.mean((a, b))
+        m_a = da.mean(b)
+        m_b = da.mean(a)
+        # Sample residual
+        resid = da - m_a - m_b + grand
+        # Residual Variance
+        var_e = (resid**2).sum((a, b)) / ((na - 1) * (nb - 1))
+        # crossed se = sqrt(var(a)/na+var(b)/nb-var_e/(na*nb)) Note: Sample variance of var_a, var_b double count residual variance (-> subtraction)
+        var_mean = m_a.var(a, ddof=1) / na + m_b.var(b, ddof=1) / nb - var_e / (na * nb)
+        return np.sqrt(var_mean.clip(min=0))
+    else:
+        # Single dim standard error (no crossed vars)
+        na = da.sizes[a]
+        var_mean = da.var(a, ddof=1) / na
+        return np.sqrt(var_mean.clip(min=0))
 
 
 def compute_stats(da, dim=("number", "sample")):
     """
     From an xarray, return statistics over the two crossed dimensions in 'dim' as an xr.Dataset.
     """
+    dim = [dim] if isinstance(dim, str) else list(dim)
+
     mean = da.mean(dim=dim)
     std = da.std(dim=dim)
-    sem = crossed_sem(da, a=dim[0], b=dim[1])
+    sem = crossed_sem(da, a=dim[0], b=dim[1] if len(dim) > 1 else None)
     min = da.min(dim=dim)
     max = da.max(dim=dim)
     p = da.quantile([0.10, 0.17, 0.5, 0.83, 0.9], dim=dim)
@@ -410,7 +423,7 @@ def redistribute_adm1(impact, config, chunk_size=4):
     # Transform dataframe back to xarray
     da = adm1.set_index(index_cols)["value"].to_xarray()
     da = da.assign_coords(
-        GID_0=("GID_1", gid0_lookup.reindex(da["GID_1"].values).values)
+        GID_0=("GID_1", gid0_lookup.reindex(da["GID_1"].values).to_numpy(dtype=object))
     )
 
     return da
@@ -478,6 +491,8 @@ def _baseline_tag(baseline_period):
 
 
 def dataset_to_dataframe(ds):
+    if isinstance(ds, xr.DataArray):
+        ds = ds.to_dataset(name=ds.name or "value")
     if len(ds.dims) == 0:
         return pd.DataFrame({k: [v.values.item()] for k, v in ds.data_vars.items()})
     return ds.to_dataframe().reset_index()
@@ -537,6 +552,7 @@ def make_csv(
         "likely_range_IPCC",
         "mean",
         "std",
+        "sem",
         "min",
         "max",
         "p10",
@@ -544,6 +560,7 @@ def make_csv(
     ]
     # Step through outputs listed in 'output_scope"
     if "regional_monthly" in output_scope:
+        print("Computing: regional_monthly")
         _polygons_impact = dataset_to_dataframe(compute_stats(impact, dim=config.dims))
         wide = _polygons_impact.pivot(
             index=base_cols,
@@ -579,8 +596,23 @@ def make_csv(
             ),
             index=False,
         )
+        print(
+            f"regional_monthly saved to: {
+                filename_template.format(
+                    version=config.version,
+                    hotonly=config.hotonly,
+                    rate_l=rate_l,
+                    scope='monthly',
+                    stat_scope='',
+                    group_level=group_level,
+                    baseline=baseline_tag,
+                    cleaned='rounded',
+                )
+            }"
+        )
 
     if "regional_6mo" in output_scope:
+        print("Computing: regional_6mo")
         mo6 = impact.sum(dim="month")
         _polygons_mo6 = dataset_to_dataframe(compute_stats(mo6, dim=config.dims))
         mo6_out = _polygons_mo6[base_cols + stat_cols]
@@ -611,6 +643,20 @@ def make_csv(
             ),
             index=False,
         )
+        print(
+            f"regional_6mo saved to: {
+                filename_template.format(
+                    version=config.version,
+                    hotonly=config.hotonly,
+                    rate_l=rate_l,
+                    scope='6mo',
+                    stat_scope='',
+                    group_level=group_level,
+                    baseline=baseline_tag,
+                    cleaned='rounded',
+                )
+            }"
+        )
 
     if "global_monthly" in output_scope or "global_6mo" in output_scope:
         # Compute global total before getting stats
@@ -619,6 +665,7 @@ def make_csv(
         )
 
         if "global_monthly" in output_scope:
+            print("Computing: global_monthly")
             global_monthly = dataset_to_dataframe(
                 compute_stats(global_impact, dim=config.dims)
             )
@@ -650,6 +697,7 @@ def make_csv(
                 index=False,
             )
         if "global_6mo" in output_scope:
+            print("Computing: global_6mo")
             global_mo6 = dataset_to_dataframe(
                 compute_stats(global_impact.sum(dim="month"), dim=config.dims)
             )

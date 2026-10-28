@@ -11,7 +11,7 @@ def compute_agreement_mask(anom, threshold=0.8, member_dim="number"):
     return land_only((agree <= threshold).astype(float))
 
 def ttest_mask(anom, alpha=0.05, member_dim="number"):
-    # One-sample t-test: is the ensemble mean significantly different from zero?
+    # One-sample t-test: is the ensemble mean significantly different from zero
     n = anom.sizes[member_dim]
     mean = anom.mean(member_dim)
     std = anom.std(member_dim, ddof=1)

@@ -247,6 +247,7 @@ def region_to_xvec(da, polygons, region_dim="region"):
         .xvec.set_geom_indexes("geometry", crs=gdf.crs)
     )
 
+
 def xarray_to_gpd(data, polygons, crs="ESRI:54030"):
     # Merge xarray with dim "region" with Impact Region Geopandas
     _polygons_data = polygons.merge(

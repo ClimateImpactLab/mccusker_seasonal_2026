@@ -93,6 +93,51 @@ def _hatch_regions(
         )
 
 
+def _hatch_grid(
+    ax, mask, hatch, hatch_color, outline, outline_color, outline_width, kw
+):
+    # contourf has no hatch-color argument; it reads rcParams at creation time
+    with plt.rc_context({"hatch.color": hatch_color}):
+        ax.contourf(
+            mask.lon,
+            mask.lat,
+            mask,
+            levels=[0.5, 1.5],
+            colors="none",
+            hatches=[hatch],
+            **kw,
+        )
+    if outline:
+        ax.contour(
+            mask.lon,
+            mask.lat,
+            mask,
+            levels=[0.5],
+            colors=outline_color,
+            linewidths=outline_width,
+            **kw,
+        )
+
+
+def _hatch_regions(
+    ax, mask, hatch, hatch_color, outline, outline_color, outline_width, kw
+):
+    selected = mask.values.astype(bool)
+    geoms = gpd.GeoSeries(
+        mask["geometry"].values[selected], crs=mask.xvec.geom_coords["geometry"].crs
+    )
+    # Hatch color follows edgecolor; linewidth=0 hides the per-region borders
+    geoms.plot(
+        ax=ax, facecolor="none", edgecolor=hatch_color, hatch=hatch, linewidth=0, **kw
+    )
+
+    # Outer boundary of the masked area, with internal region borders dissolved
+    if outline and len(geoms):
+        gpd.GeoSeries([geoms.union_all().boundary]).plot(
+            ax=ax, color=outline_color, linewidth=outline_width, **kw
+        )
+
+
 def build_stats_text(da, dim=None, fmt="{:.2f}"):
     stats = {
         "mean": float(da.mean(dim=dim)),

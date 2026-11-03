@@ -92,6 +92,7 @@ def _hatch_regions(
             ax=ax, color=outline_color, linewidth=outline_width, **kw
         )
 
+
 def build_stats_text(da, dim=None, fmt="{:.2f}"):
     stats = {
         "mean": float(da.mean(dim=dim)),
